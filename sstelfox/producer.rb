@@ -8,6 +8,7 @@ connection.start
 
 channel = connection.channel
 exchange = channel.direct('pwnie.cloud', :durable => true)
+queue = channel.queue("noop", :auto_delete => true).bind(exchange, :routing_key => 'test.workers')
 
 def message_generator(byte_size)
   JSON.generate({size: byte_size, time: Time.now.to_f, content: SecureRandom.hex(byte_size / 2)})
@@ -15,12 +16,12 @@ end
 
 stats = {}
 stats[:start_time] = Time.now.to_f
-stats[:duration] = 60
-stats[:message_size] = 256
+stats[:duration] = 5
+stats[:message_size] = 16 * 1024
 stats[:counts] = Hash.new(0)
 
 while Time.now.to_f < (stats[:start_time] + stats[:duration])
-  exchange.publish(message_generator(stats[:message_size]), :routing_key => 'test.workers')
+  queue.publish(message_generator(stats[:message_size]))
   stats[:counts][Time.now.to_i] += 1
 end
 
