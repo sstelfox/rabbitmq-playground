@@ -36,22 +36,15 @@ generation_end_time = Time.now.to_f
 
 stats[:message_generation_time] = generation_end_time - generation_start_time
 
-puts JSON.pretty_generate(stats)
-
-connection.close
-
-connection = Bunny.new(ENV['AMQP_URI'] || "amqp://guest:guest@127.0.0.1:5672")
-connection.start
-
-channel = connection.channel
-exchange = channel.topic('pwnie.cloud')
-queue = channel.queue("workers.test").bind(exchange, :routing_key => "workers.test.#")
-
-count = 0
-queue.subscribe(:block => true) do |a, b, c|
-  count += 1
-  puts "Received: #{count}" if (count % 1000) == 0
+empty_start_time = Time.now.to_f
+while queue.status[:message_count] > 0
+  queue.pop
 end
+empty_end_time = Time.now.to_f
+
+stats[:empty_time] = empty_end_time - empty_start_time
+
+puts JSON.pretty_generate(stats)
 
 connection.close
 
