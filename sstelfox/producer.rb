@@ -7,8 +7,8 @@ connection = Bunny.new(ENV['AMQP_URI'] || "amqp://guest:guest@127.0.0.1:5672")
 connection.start
 
 channel = connection.channel
-exchange = channel.direct('pwnie.cloud')
-queue = channel.queue("noop", :auto_delete => true).bind(exchange, :routing_key => 'test.workers')
+exchange = channel.topic('pwnie.cloud')
+queue = channel.queue("workers.test").bind(exchange, :routing_key => "workers.test.#")
 
 def message_generator(byte_size)
   JSON.generate({size: byte_size, time: Time.now.to_f, content: SecureRandom.hex(byte_size / 2)})
@@ -17,11 +17,11 @@ end
 stats = {}
 stats[:start_time] = Time.now.to_f
 stats[:duration] = 5
-stats[:message_size] = 16 * 1024
+stats[:message_size] = 256
 stats[:counts] = Hash.new(0)
 
 while Time.now.to_f < (stats[:start_time] + stats[:duration])
-  queue.publish(message_generator(stats[:message_size]))
+  exchange.publish(message_generator(stats[:message_size]), :routing_key => 'workers.test.something')
   stats[:counts][Time.now.to_i] += 1
 end
 
@@ -37,6 +37,21 @@ generation_end_time = Time.now.to_f
 stats[:message_generation_time] = generation_end_time - generation_start_time
 
 puts JSON.pretty_generate(stats)
+
+connection.close
+
+connection = Bunny.new(ENV['AMQP_URI'] || "amqp://guest:guest@127.0.0.1:5672")
+connection.start
+
+channel = connection.channel
+exchange = channel.topic('pwnie.cloud')
+queue = channel.queue("workers.test").bind(exchange, :routing_key => "workers.test.#")
+
+count = 0
+queue.subscribe(:block => true) do |a, b, c|
+  count += 1
+  puts "Received: #{count}" if (count % 1000) == 0
+end
 
 connection.close
 
